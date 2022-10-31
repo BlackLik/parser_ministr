@@ -11,6 +11,9 @@ from bs4 import BeautifulSoup
 
 class parser_filter:
     def __init__(self, user_agent: str = None) -> None:
+        """Инцилизация класса
+        Аргументы
+        user_agent: string - юзер агент браузера, если его нет, то будет присвоен фейковый"""
         self.fake = Faker()
         self.session = requests.Session()
         self.session.headers = {
@@ -19,6 +22,14 @@ class parser_filter:
         self.session.verify = False
 
     def get_url_filter(self, code: str) -> str:
+        """Получить ссылки для кода
+
+        Args:
+            code: string принимает код
+
+        Returns:
+            str: возвращаяет ссылку на страницу этого кода
+        """
         url_filter = "https://profstandart.rosmintrud.ru/obshchiy-informatsionnyy-blok/natsionalnyy-reestr-professionalnykh-standartov/reestr-professionalnykh-standartov/?OKVED_OLD%5B%5D=&inp_OKVED_OLD=&OKVED%5B%5D=&inp_OKVED=&OKZ%5B%5D=&inp_OKZ=&OKZ_010_93%5B%5D=&inp_OKZ_010_93=&OKPDTR%5B%5D=&inp_OKPDTR=&OKSO%5B%5D=&inp_OKSO=&NAME=&KPF=" + \
             code+"&RANGE_PROFACT=&KIND_PROFACT=&DEVELOPERS=&FIO_HEAD=&ADVICE_PQ=&DATE_STATEMENT_FROM=&DATE_STATEMENT_TO=&N_ORDER=&OKSO_2016=&set_filter=%D0%A4%D0%B8%D0%BB%D1%8C%D1%82%D1%80&set_filter=Y#"
         print(url_filter)
@@ -27,7 +38,14 @@ class parser_filter:
         element = soup.select_one('td>ul>li>a')
         return element.get('href')
 
-    def get_orc(self, url: str):
+    def get_orc(self, url: str) -> tuple:
+        """Получение ОРК из страницы
+
+        Args:
+            url: string ссылку, которую надо парсить
+
+        Возвращаяет:
+            tuple: генератор"""
         req = self.session.get(url)
         soup = BeautifulSoup(req.text, 'html.parser')
         index = 24
@@ -52,13 +70,30 @@ class parser_filter:
             selector_query = 'tbody:nth-child({}) > tr > td > center'.format(index)
             elements = soup.select(selector_query)
 
-    def get_code(self, html):
+    def get_code(self, html: str) -> list:
+        """AI is creating summary for get_code
+
+        Args:
+            html (str): разметка html
+
+        Returns:
+            list: результат кодово
+        """
         soup = BeautifulSoup(html, 'html.parser')
         items = soup.select("table tbody tr")
         data = [item.select('td a')[1].text.strip() for item in items]
         return data
 
-    def check_items(self, prof: str, page):
+    def check_items(self, prof: str, page: int) -> list:
+        """Рекурсивная функция для получение кодов и проверки пагинации
+
+        Args:
+            prof (str): номер проф кода
+            page (int): номер страницы
+
+        Returns:
+            list: результат кодово
+        """
         url = "https://profstandart.rosmintrud.ru/obshchiy-informatsionnyy-blok/natsionalnyy-reestr-professionalnykh-standartov/reestr-professionalnykh-standartov/?OKVED_OLD%5B0%5D=&inp_OKVED_OLD=&OKVED%5B0%5D=&inp_OKVED=&OKZ%5B0%5D=&inp_OKZ=&OKZ_010_93%5B0%5D=&inp_OKZ_010_93=&OKPDTR%5B0%5D=&inp_OKPDTR=&OKSO%5B0%5D=&inp_OKSO=&NAME=&KPF=&RANGE_PROFACT=&KIND_PROFACT=&DEVELOPERS=&FIO_HEAD=&ADVICE_PQ=&DATE_STATEMENT_FROM=&DATE_STATEMENT_TO=&N_ORDER=&OKSO_2016={}&set_filter=Y&PAGEN_1={}&SIZEN_1=20#".format(
             prof, page)
         print(url)
@@ -69,7 +104,6 @@ class parser_filter:
         data = self.get_code(req.text)
         time.sleep(5)
         if len(have_items) == 0:
-            # data.append(self.get_code(req.text))
             check_pagination = soup.select(
                 "div.bx_pagination_bottom > div.bx_pagination_section_one > div > div > ul li")
 
@@ -82,6 +116,11 @@ class parser_filter:
 
 class App:
     def __init__(self, path_file_input: str = constant.FILE_INPUT) -> None:
+        """__init__
+
+        Args:
+            path_file_input (str, optional): [description]. Defaults to constant.FILE_INPUT.
+        """
         self.con = sqlite3.connect('code.sqlite3')
         self.cur = self.con.cursor()
 
@@ -99,8 +138,7 @@ class App:
             print(e)
 
     def run(self) -> None:
-        """Start the app"""
-        # pf = parser_filter(user_agent=constant.USER_AGENT)
+        """Start the app. 1 задача"""
         for item in self.lines:
             query_selector = """SELECT t.filter_url from main.{} as t where t.code = '{}' """.format(
                 self.name_table, item)
@@ -148,10 +186,12 @@ class App:
         self.df = pandas.read_sql_query('select * from out', con=self.con)
         self.df.to_excel('out.xlsx', sheet_name='list1')
 
-    def search_data_code_with_prof(self):
+    def search_data_code_with_prof(self) -> None:
+        """2 задача"""
         f = open('prof_codes.txt', 'r').read().splitlines()
         for prof_code in f:
-            res = self.cur.execute('select count(*) from main.prof p where p.prof = \'{}\';'.format(prof_code))
+            res = self.cur.execute(
+                'select count(*) from main.prof p where p.prof = \'{}\';'.format(prof_code))
             # print(res.fetchone()[0])
             if res.fetchone()[0] == 0:
                 data = self.pf.check_items(prof_code, 1)
@@ -180,4 +220,5 @@ class App:
 
 if __name__ == '__main__':
     app = App()
+    app.run()
     app.search_data_code_with_prof()
